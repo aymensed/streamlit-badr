@@ -1,0 +1,36 @@
+{
+  "best_model": "Gradient Boosting",
+  "test_metrics": {
+    "accuracy": 0.987,
+    "precision": 0.7333333333333333,
+    "recall": 0.3333333333333333,
+    "f1_score": 0.45833333333333326,
+    "roc_auc": 0.8049020967170434,
+    "average_precision": 0.3959065614427221
+  },
+  "confusion_matrix": [
+    [
+      1963,
+      4
+    ],
+    [
+      22,
+      11
+    ]
+  ],
+  "cost_analysis": {
+    "true_positives": 11,
+    "false_positives": 4,
+    "false_negatives": 22,
+    "cost_undetected_frauds": 1100000.0,
+    "cost_false_alarms": 2000.0,
+    "total_cost": 1102000.0
+  },
+  "training_info": {
+    "train_samples": 8000,
+    "test_samples": 2000,
+    "fraud_rate_train": 0.016625,
+    "fraud_rate_test": 0.0165,
+    "training_date": "2026-01-15 16:41:11"
+  }
+}
