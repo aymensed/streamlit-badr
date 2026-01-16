@@ -1,173 +1,235 @@
-# app.py - Version complète pour Streamlit Cloud avec modèle ML
+# app.py - Interface Streamlit qui ressemble à votre HTML Bootstrap
 import streamlit as st
 import pandas as pd
 import numpy as np
-import joblib
-import json
-import pickle
-import io
+import time
 from datetime import datetime
-import warnings
-warnings.filterwarnings('ignore')
+import json
 
 # Configuration de la page
 st.set_page_config(
-    page_title="🏦 Banque Badr - Détection de Fraude ML",
-    page_icon="🔒",
+    page_title="🚨 Système de Détection de Fraude - Banque Badr",
+    page_icon="🏦",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# CSS moderne pour l'interface
+# CSS pour reproduire exactement le design Bootstrap
 st.markdown("""
 <style>
-    /* Variables de couleur */
+    /* Variables de couleur racine */
     :root {
-        --primary: #2c3e50;
-        --secondary: #3498db;
-        --success: #27ae60;
-        --danger: #e74c3c;
-        --warning: #f39c12;
-        --info: #17a2b8;
+        --primary-color: #2c3e50;
+        --secondary-color: #3498db;
+        --success-color: #27ae60;
+        --danger-color: #e74c3c;
+        --warning-color: #f39c12;
     }
     
     /* Style général */
     .main {
-        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-        padding: 20px;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%) !important;
+        min-height: 100vh;
     }
     
-    /* Cartes de statistiques */
-    .stat-card {
-        border-radius: 15px;
-        padding: 20px;
-        text-align: center;
-        color: white;
-        margin: 10px 0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        transition: transform 0.3s;
+    /* Navigation */
+    .stApp header {
+        background-color: var(--primary-color) !important;
     }
     
-    .stat-card:hover {
-        transform: translateY(-5px);
+    /* Cartes */
+    .card {
+        border-radius: 15px !important;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1) !important;
+        border: none !important;
+        margin-bottom: 20px !important;
+        background-color: white !important;
     }
     
-    .stat-total { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-    .stat-fraud { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
-    .stat-normal { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-    .stat-amount { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+    .card-header {
+        border-radius: 15px 15px 0 0 !important;
+        font-weight: bold !important;
+        font-size: 1.1rem !important;
+        padding: 15px 20px !important;
+    }
+    
+    .card-body {
+        padding: 20px !important;
+    }
+    
+    /* Classes de risque */
+    .risk-high {
+        color: #e74c3c !important;
+        font-weight: bold !important;
+        background-color: rgba(231, 76, 60, 0.1) !important;
+        padding: 5px 10px !important;
+        border-radius: 5px !important;
+        display: inline-block !important;
+    }
+    
+    .risk-medium {
+        color: #f39c12 !important;
+        font-weight: bold !important;
+        background-color: rgba(243, 156, 18, 0.1) !important;
+        padding: 5px 10px !important;
+        border-radius: 5px !important;
+        display: inline-block !important;
+    }
+    
+    .risk-low {
+        color: #27ae60 !important;
+        font-weight: bold !important;
+        background-color: rgba(39, 174, 96, 0.1) !important;
+        padding: 5px 10px !important;
+        border-radius: 5px !important;
+        display: inline-block !important;
+    }
     
     /* Badges */
-    .badge-fraud {
-        background-color: #e74c3c;
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85em;
-        font-weight: bold;
+    .fraud-badge {
+        background-color: #e74c3c !important;
+        color: white !important;
+        padding: 3px 8px !important;
+        border-radius: 12px !important;
+        font-size: 0.8em !important;
+        display: inline-block !important;
     }
     
-    .badge-normal {
-        background-color: #27ae60;
-        color: white;
-        padding: 4px 12px;
-        border-radius: 20px;
-        font-size: 0.85em;
-        font-weight: bold;
-    }
-    
-    .badge-risk-high {
-        background-color: rgba(231, 76, 60, 0.2);
-        color: #e74c3c;
-        padding: 4px 12px;
-        border-radius: 20px;
-        border: 1px solid #e74c3c;
-        font-weight: bold;
-    }
-    
-    .badge-risk-medium {
-        background-color: rgba(243, 156, 18, 0.2);
-        color: #f39c12;
-        padding: 4px 12px;
-        border-radius: 20px;
-        border: 1px solid #f39c12;
-        font-weight: bold;
-    }
-    
-    .badge-risk-low {
-        background-color: rgba(39, 174, 96, 0.2);
-        color: #27ae60;
-        padding: 4px 12px;
-        border-radius: 20px;
-        border: 1px solid #27ae60;
-        font-weight: bold;
-    }
-    
-    /* Boutons */
-    .stButton > button {
-        border-radius: 8px;
-        border: none;
-        transition: all 0.3s;
-    }
-    
-    .stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    }
-    
-    /* En-tête */
-    .header {
-        background: linear-gradient(135deg, var(--primary) 0%, #1a2530 100%);
-        padding: 30px;
-        border-radius: 15px;
-        margin-bottom: 30px;
-        color: white;
-    }
-    
-    /* Alertes */
-    .alert-fraud {
-        background-color: #ffebee;
-        border-left: 5px solid #e74c3c;
-        padding: 20px;
-        border-radius: 10px;
-        margin: 15px 0;
-    }
-    
-    .alert-normal {
-        background-color: #e8f5e9;
-        border-left: 5px solid #27ae60;
-        padding: 20px;
-        border-radius: 10px;
-        margin: 15px 0;
-    }
-    
-    /* Table */
-    .transaction-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    
-    .transaction-table th {
-        background-color: var(--primary);
-        color: white;
-        padding: 12px;
-        text-align: left;
-    }
-    
-    .transaction-table td {
-        padding: 12px;
-        border-bottom: 1px solid #ddd;
-    }
-    
-    .transaction-table tr:hover {
-        background-color: #f5f5f5;
+    .normal-badge {
+        background-color: #27ae60 !important;
+        color: white !important;
+        padding: 3px 8px !important;
+        border-radius: 12px !important;
+        font-size: 0.8em !important;
+        display: inline-block !important;
     }
     
     /* Barre de progression */
     .stProgress > div > div > div > div {
-        background: linear-gradient(90deg, var(--success) 0%, var(--danger) 100%);
-        border-radius: 10px;
-        height: 20px;
+        background: linear-gradient(90deg, var(--secondary-color), var(--success-color)) !important;
+        height: 25px !important;
+        border-radius: 12px !important;
+    }
+    
+    /* Cartes de statistiques */
+    .stat-card {
+        text-align: center !important;
+        padding: 20px !important;
+        border-radius: 10px !important;
+        color: white !important;
+        margin-bottom: 15px !important;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
+    }
+    
+    .stat-card-total {
+        background: linear-gradient(135deg, #3498db, #2980b9) !important;
+    }
+    
+    .stat-card-fraud {
+        background: linear-gradient(135deg, #e74c3c, #c0392b) !important;
+    }
+    
+    .stat-card-normal {
+        background: linear-gradient(135deg, #27ae60, #219653) !important;
+    }
+    
+    .stat-card-amount {
+        background: linear-gradient(135deg, #9b59b6, #8e44ad) !important;
+    }
+    
+    /* Boutons */
+    .stButton > button {
+        border-radius: 8px !important;
+        border: none !important;
+        transition: all 0.3s !important;
+        width: 100% !important;
+    }
+    
+    .stButton > button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2) !important;
+    }
+    
+    /* Tableau */
+    .transaction-table {
+        max-height: 400px !important;
+        overflow-y: auto !important;
+    }
+    
+    table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+    }
+    
+    th {
+        background-color: var(--primary-color) !important;
+        color: white !important;
+        padding: 12px !important;
+        text-align: left !important;
+    }
+    
+    td {
+        padding: 12px !important;
+        border-bottom: 1px solid #ddd !important;
+    }
+    
+    tr:hover {
+        background-color: #f5f5f5 !important;
+    }
+    
+    /* Inputs */
+    .stSelectbox, .stNumberInput, .stTextInput {
+        margin-bottom: 10px !important;
+    }
+    
+    /* Alertes */
+    .alert {
+        padding: 15px !important;
+        border-radius: 10px !important;
+        margin: 10px 0 !important;
+        border-left: 5px solid !important;
+    }
+    
+    .alert-danger {
+        background-color: #f8d7da !important;
+        border-left-color: #dc3545 !important;
+        color: #721c24 !important;
+    }
+    
+    .alert-success {
+        background-color: #d4edda !important;
+        border-left-color: #28a745 !important;
+        color: #155724 !important;
+    }
+    
+    .alert-warning {
+        background-color: #fff3cd !important;
+        border-left-color: #ffc107 !important;
+        color: #856404 !important;
+    }
+    
+    /* Boutons d'exemple */
+    .example-btn {
+        margin: 5px 0 !important;
+        border-radius: 20px !important;
+    }
+    
+    /* Indicateur API */
+    .api-status {
+        display: inline-block !important;
+        width: 12px !important;
+        height: 12px !important;
+        border-radius: 50% !important;
+        margin-right: 5px !important;
+    }
+    
+    .api-status-online {
+        background-color: #27ae60 !important;
+        animation: pulse 2s infinite !important;
+    }
+    
+    .api-status-offline {
+        background-color: #e74c3c !important;
     }
     
     @keyframes pulse {
@@ -176,8 +238,28 @@ st.markdown("""
         100% { opacity: 1; }
     }
     
-    .pulse {
-        animation: pulse 2s infinite;
+    /* Conteneurs */
+    .stContainer {
+        padding: 0 !important;
+    }
+    
+    /* Espacement */
+    .st-emotion-cache-1y4p8pa {
+        padding: 2rem 1rem !important;
+    }
+    
+    /* Titres */
+    h1, h2, h3, h4, h5, h6 {
+        color: var(--primary-color) !important;
+    }
+    
+    /* Pied de page */
+    footer {
+        text-align: center !important;
+        color: #666 !important;
+        padding: 20px !important;
+        margin-top: 40px !important;
+        border-top: 1px solid #ddd !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -186,203 +268,43 @@ st.markdown("""
 if 'transactions' not in st.session_state:
     st.session_state.transactions = []
     st.session_state.transaction_counter = 1
-    st.session_state.total_amount = 0
-    st.session_state.model_loaded = False
-    st.session_state.ml_model = None
-    st.session_state.encoder = None
+    st.session_state.stats = {
+        'total': 0,
+        'fraud': 0,
+        'normal': 0,
+        'total_amount': 0
+    }
 
-# ========== FONCTIONS ML ==========
-def load_ml_model():
-    """Charge le modèle ML depuis les données intégrées ou fichiers"""
-    try:
-        # Essayer de charger depuis les fichiers (pour développement local)
-        try:
-            model = joblib.load('fraud_detection_model.pkl')
-            encoder = joblib.load('onehot_encoder.pkl')
-            st.session_state.model_loaded = True
-            st.session_state.ml_model = model
-            st.session_state.encoder = encoder
-            return True
-        except:
-            # Si pas de fichiers, créer un modèle simulé (pour démo)
-            st.info("⚠️ Création d'un modèle simulé pour la démo...")
-            
-            class SimulatedModel:
-                def predict_proba(self, X):
-                    # Simulation basée sur des règles métier
-                    probas = []
-                    for i in range(len(X)):
-                        if X.iloc[i]['montant_dzd'] > 50000:
-                            prob = np.random.uniform(0.6, 0.9)
-                        elif X.iloc[i]['heure_jour'] < 6:
-                            prob = np.random.uniform(0.4, 0.7)
-                        else:
-                            prob = np.random.uniform(0.1, 0.3)
-                        probas.append([1-prob, prob])
-                    return np.array(probas)
-                
-                def predict(self, X):
-                    probas = self.predict_proba(X)
-                    return (probas[:, 1] > 0.5).astype(int)
-            
-            class SimulatedEncoder:
-                def transform(self, X):
-                    # Simulation d'encodage one-hot
-                    return np.zeros((len(X), 10))
-                
-                def get_feature_names_out(self, features):
-                    return [f"cat_{i}" for i in range(10)]
-            
-            st.session_state.ml_model = SimulatedModel()
-            st.session_state.encoder = SimulatedEncoder()
-            st.session_state.model_loaded = True
-            return True
-            
-    except Exception as e:
-        st.error(f"Erreur lors du chargement du modèle: {e}")
-        return False
-
-def prepare_features_for_ml(transaction_data):
-    """Prépare les features pour le modèle ML"""
-    try:
-        # Créer un DataFrame
-        df = pd.DataFrame([transaction_data])
-        
-        # Calculer les features additionnelles
-        df['montant_anormal_score'] = abs(df['montant_dzd'] - (df['revenu_client'] * 0.1)) / df['revenu_client'].clip(lower=1)
-        df['heure_inhabituelle'] = ((df['heure_jour'] >= 1) & (df['heure_jour'] <= 5)).astype(int)
-        df['localisation_etrangere'] = 0  # Pour simplifier
-        df['categorie_risquee'] = df['categorie_marchand'].isin(['ELECTRONIQUE', 'VOYAGE', 'IMMOBILIER']).astype(int)
-        df['ratio_montant_revenu'] = df['montant_dzd'] / df['revenu_client'].clip(lower=1)
-        
-        # Features catégorielles à encoder
-        categorical_cols = ['type_transaction', 'categorie_marchand', 'canal_paiement', 'wilaya_client']
-        
-        if st.session_state.encoder:
-            # Encoder les catégorielles
-            categorical_data = df[categorical_cols]
-            encoded = st.session_state.encoder.transform(categorical_data)
-            
-            # Features numériques
-            numerical_cols = ['montant_dzd', 'heure_jour', 'revenu_client', 
-                            'anciennete_client_jours', 'montant_anormal_score',
-                            'heure_inhabituelle', 'localisation_etrangere',
-                            'categorie_risquee', 'ratio_montant_revenu']
-            
-            numerical_data = df[numerical_cols].values
-            
-            # Combiner
-            features = np.hstack([numerical_data, encoded])
-            return features, df
-        
-        return None, df
-        
-    except Exception as e:
-        st.error(f"Erreur préparation features: {e}")
-        return None, None
-
-def predict_with_ml(transaction_data):
-    """Prédit avec le modèle ML"""
-    try:
-        features, df = prepare_features_for_ml(transaction_data)
-        
-        if features is not None and st.session_state.ml_model:
-            # Faire la prédiction
-            probas = st.session_state.ml_model.predict_proba(features)
-            fraud_probability = float(probas[0][1])
-            is_fraud = fraud_probability > 0.5
-            
-            # Calculer le score de risque
-            risk_score = fraud_probability
-            
-            # Déterminer le niveau de risque
-            if fraud_probability >= 0.7:
-                risk_level = "HIGH"
-            elif fraud_probability >= 0.4:
-                risk_level = "MEDIUM"
-            else:
-                risk_level = "LOW"
-            
-            # Générer les raisons
-            reasons = []
-            
-            if df is not None:
-                if df['montant_anormal_score'].iloc[0] > 2:
-                    reasons.append(f"Montant anormal (score: {df['montant_anormal_score'].iloc[0]:.2f})")
-                
-                if df['heure_inhabituelle'].iloc[0] == 1:
-                    reasons.append("Transaction à heure inhabituelle (1h-5h)")
-                
-                if df['categorie_risquee'].iloc[0] == 1:
-                    reasons.append(f"Catégorie à risque: {transaction_data['categorie_marchand']}")
-                
-                if df['ratio_montant_revenu'].iloc[0] > 0.5:
-                    reasons.append(f"Montant élevé ({df['ratio_montant_revenu'].iloc[0]*100:.0f}% du revenu)")
-                
-                if transaction_data['anciennete_client_jours'] < 90:
-                    reasons.append(f"Compte récent ({transaction_data['anciennete_client_jours']} jours)")
-            
-            # Recommandation
-            if is_fraud:
-                if fraud_probability > 0.8:
-                    recommendation = "BLOQUER - Fraude confirmée"
-                else:
-                    recommendation = "SUSPENDRE - Nécessite vérification"
-            else:
-                if risk_level == "HIGH":
-                    recommendation = "VÉRIFIER - Risque élevé"
-                elif risk_level == "MEDIUM":
-                    recommendation = "SURVEILLER - Risque moyen"
-                else:
-                    recommendation = "APPROUVER - Risque faible"
-            
-            return {
-                'is_fraud': bool(is_fraud),
-                'fraud_probability': fraud_probability,
-                'risk_level': risk_level,
-                'risk_score': risk_score,
-                'reasons': reasons if reasons else ["Transaction normale"],
-                'recommendation': recommendation,
-                'model_confidence': float(probas[0].max()),
-                'features_used': len(features[0]) if features is not None else 0
-            }
-        
-        # Fallback à la simulation si modèle non disponible
-        return predict_with_simulation(transaction_data)
-        
-    except Exception as e:
-        st.error(f"Erreur prédiction ML: {e}")
-        return predict_with_simulation(transaction_data)
-
-def predict_with_simulation(transaction_data):
-    """Simulation si le modèle ML n'est pas disponible"""
+# Fonction de simulation ML
+def simulate_ml_prediction(transaction_data):
+    """Simule une prédiction ML"""
     score = 0.0
-    raisons = []
+    reasons = []
     
-    # Logique de simulation
-    ratio = transaction_data['montant_dzd'] / transaction_data['revenu_client']
-    if ratio > 0.5:
+    # Règles de détection
+    if transaction_data['montant'] > transaction_data['revenu'] * 0.5:
         score += 0.4
-        raisons.append(f"Montant élevé ({ratio*100:.0f}% du revenu)")
+        reasons.append(f"Montant élevé ({transaction_data['montant']/transaction_data['revenu']*100:.0f}% du revenu)")
     
-    if 1 <= transaction_data['heure_jour'] <= 5:
+    if 1 <= transaction_data['heure'] <= 5:
         score += 0.3
-        raisons.append(f"Heure nocturne ({transaction_data['heure_jour']}h)")
+        reasons.append(f"Heure nocturne ({transaction_data['heure']}h)")
     
-    if transaction_data['categorie_marchand'] in ['ELECTRONIQUE', 'VOYAGE', 'IMMOBILIER']:
+    if transaction_data['categorie'] in ['ELECTRONIQUE', 'VOYAGE', 'IMMOBILIER']:
         score += 0.2
-        raisons.append(f"Catégorie à risque: {transaction_data['categorie_marchand']}")
+        reasons.append(f"Catégorie à risque: {transaction_data['categorie']}")
     
-    if transaction_data['anciennete_client_jours'] < 90:
+    if transaction_data['anciennete'] < 90:
         score += 0.1
-        raisons.append(f"Compte récent ({transaction_data['anciennete_client_jours']} jours)")
+        reasons.append(f"Compte récent ({transaction_data['anciennete']} jours)")
     
-    if transaction_data['type_transaction'] in ['PAIEMENT_EN_LIGNE', 'VIREMENT']:
+    if transaction_data['type'] in ['PAIEMENT_EN_LIGNE', 'VIREMENT']:
         score += 0.15
     
     score = min(score, 1.0)
     is_fraud = score > 0.5
     
+    # Niveau de risque
     if score >= 0.7:
         risk_level = "HIGH"
     elif score >= 0.4:
@@ -390,411 +312,482 @@ def predict_with_simulation(transaction_data):
     else:
         risk_level = "LOW"
     
+    # Recommandation
     if is_fraud:
-        recommendation = "BLOQUER - Fraude suspectée" if score > 0.7 else "SUSPENDRE - À vérifier"
+        if score > 0.8:
+            recommendation = "BLOQUER - Fraude confirmée"
+        else:
+            recommendation = "SUSPENDRE - Nécessite vérification"
     else:
-        recommendation = "VÉRIFIER - Risque élevé" if risk_level == "HIGH" else "APPROUVER - Risque acceptable"
+        if risk_level == "HIGH":
+            recommendation = "VÉRIFIER - Risque élevé"
+        elif risk_level == "MEDIUM":
+            recommendation = "SURVEILLER - Risque moyen"
+        else:
+            recommendation = "APPROUVER - Risque faible"
     
     return {
         'is_fraud': is_fraud,
         'fraud_probability': score,
         'risk_level': risk_level,
-        'risk_score': score,
-        'reasons': raisons if raisons else ["Transaction normale"],
+        'reasons': reasons if reasons else ["Transaction normale"],
         'recommendation': recommendation,
-        'model_confidence': 0.85,
-        'features_used': 10
+        'confidence': 0.95
     }
 
-# ========== INTERFACE STREAMLIT ==========
-
-# En-tête principal
+# ========== BARRE DE NAVIGATION ==========
 st.markdown("""
-<div class="header">
-    <div style="display: flex; align-items: center; gap: 20px;">
-        <div style="font-size: 48px;">🏦</div>
-        <div>
-            <h1 style="margin: 0; color: white;">Banque Badr</h1>
-            <h2 style="margin: 0; color: #3498db;">Système Intelligent de Détection de Fraude</h2>
-            <p style="margin: 5px 0 0 0; opacity: 0.8;">Powered by Machine Learning & AI</p>
+<nav style="background-color: #2c3e50; padding: 1rem; border-radius: 0 0 10px 10px; margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; color: white;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 24px;">🏦</span>
+            <h2 style="margin: 0; font-weight: bold; color: white;">Banque Badr - Détection de Fraude</h2>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <div>
+                <span class="api-status api-status-online"></span>
+                <span>API: http://127.0.0.1:8000 ✓</span>
+            </div>
+            <button style="background: transparent; border: 1px solid white; color: white; padding: 5px 15px; border-radius: 5px; cursor: pointer;">
+                <i class="fas fa-sync-alt"></i> Tester
+            </button>
         </div>
     </div>
-</div>
+</nav>
 """, unsafe_allow_html=True)
 
-# Barre latérale
-with st.sidebar:
-    st.markdown("### 📊 Tableau de Bord")
-    
-    # Statut ML
-    if not st.session_state.model_loaded:
-        if st.button("🔧 Charger le modèle ML"):
-            with st.spinner("Chargement du modèle..."):
-                if load_ml_model():
-                    st.success("✅ Modèle ML chargé")
-                    st.rerun()
-    else:
-        st.success("✅ Modèle ML actif")
-        st.caption(f"Transactions analysées: {len(st.session_state.transactions)}")
-    
-    st.markdown("---")
-    
-    # Statistiques
-    if st.session_state.transactions:
-        total = len(st.session_state.transactions)
-        fraudes = sum(1 for t in st.session_state.transactions if t['is_fraud'])
-        montant_total = sum(t['montant'] for t in st.session_state.transactions)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"""
-            <div class="stat-card stat-total">
-                <h3>{total}</h3>
-                <p>Total</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col2:
-            st.markdown(f"""
-            <div class="stat-card stat-fraud">
-                <h3>{fraudes}</h3>
-                <p>Fraudes</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        st.metric("Taux de fraude", f"{(fraudes/total*100):.1f}%" if total > 0 else "0%")
-        st.metric("Montant total", f"{montant_total:,.0f} DZD")
-    
-    st.markdown("---")
-    
-    # Bouton effacer historique
-    if st.button("🗑️ Effacer l'historique", use_container_width=True):
-        st.session_state.transactions = []
-        st.session_state.transaction_counter = 1
-        st.session_state.total_amount = 0
-        st.success("Historique effacé!")
-        st.rerun()
-    
-    # Info
-    st.markdown("---")
+# ========== CONTENU PRINCIPAL ==========
+col1, col2 = st.columns([5, 7], gap="large")
+
+# ========== COLONNE GAUCHE ==========
+with col1:
+    # Carte: Nouvelle transaction
     st.markdown("""
-    <div style="font-size: 0.8em; color: #666;">
-        <p><strong>🚀 Déployé sur Streamlit Cloud</strong></p>
-        <p>Modèle: Random Forest</p>
-        <p>Précision: 95%</p>
-        <p>Dernière mise à jour: {}</p>
+    <div class="card">
+        <div class="card-header" style="background-color: #3498db; color: white;">
+            <i class="fas fa-credit-card"></i> Nouvelle Transaction
+        </div>
+        <div class="card-body">
+    """, unsafe_allow_html=True)
+    
+    # Formulaire en 2 colonnes
+    col_form1, col_form2 = st.columns(2, gap="medium")
+    
+    with col_form1:
+        montant = st.number_input(
+            "Montant (DZD)",
+            min_value=1000,
+            max_value=1000000,
+            value=8500,
+            step=100,
+            key="montant"
+        )
+        
+        heure = st.selectbox(
+            "Heure de transaction",
+            options=[14, 3, 10, 20],
+            format_func=lambda x: f"{x}:00 - {'Après-midi' if x == 14 else 'Nuit' if x == 3 else 'Matin' if x == 10 else 'Soir'}",
+            key="heure"
+        )
+        
+        type_transaction = st.selectbox(
+            "Type de transaction",
+            ["ACHAT_CARTE", "RETRAIT_DAB", "VIREMENT", "PAIEMENT_EN_LIGNE", "PAIEMENT_FACTURE"],
+            key="type_transaction"
+        )
+        
+        categorie_marchand = st.selectbox(
+            "Catégorie marchand",
+            ["SUPERMARCHE", "ELECTRONIQUE", "VOYAGE", "IMMOBILIER", "RESTAURANT", "ESSENCE", "PHARMACIE"],
+            key="categorie_marchand"
+        )
+    
+    with col_form2:
+        canal_paiement = st.selectbox(
+            "Canal de paiement",
+            ["CARTE_PHYSIQUE", "MOBILE_BANKING", "INTERNET_BANKING", "DAB", "AGENCE"],
+            key="canal_paiement"
+        )
+        
+        wilaya_client = st.selectbox(
+            "Wilaya du client",
+            ["Alger", "Oran", "Constantine", "Annaba", "Blida", "Sétif", "Batna"],
+            key="wilaya_client"
+        )
+        
+        revenu_client = st.number_input(
+            "Revenu mensuel (DZD)",
+            min_value=10000,
+            max_value=500000,
+            value=45000,
+            step=1000,
+            key="revenu_client"
+        )
+        
+        anciennete = st.number_input(
+            "Ancienneté compte (jours)",
+            min_value=1,
+            max_value=3650,
+            value=500,
+            key="anciennete"
+        )
+    
+    # Bouton de vérification
+    st.markdown("</div></div>", unsafe_allow_html=True)
+    
+    if st.button("🔍 Vérifier la transaction", type="primary", use_container_width=True):
+        # Préparer les données
+        transaction_data = {
+            'montant': montant,
+            'heure': heure,
+            'type': type_transaction,
+            'categorie': categorie_marchand,
+            'canal': canal_paiement,
+            'wilaya': wilaya_client,
+            'revenu': revenu_client,
+            'anciennete': anciennete,
+            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            'id': f"TXN-{st.session_state.transaction_counter}"
+        }
+        
+        # Simulation d'analyse
+        with st.spinner("Analyse en cours..."):
+            time.sleep(1)  # Simulation du temps de traitement
+            prediction = simulate_ml_prediction(transaction_data)
+            
+            # Combiner les données
+            full_result = {**transaction_data, **prediction}
+            
+            # Mettre à jour l'historique
+            st.session_state.transactions.append(full_result)
+            st.session_state.transaction_counter += 1
+            
+            # Mettre à jour les stats
+            st.session_state.stats['total'] += 1
+            if prediction['is_fraud']:
+                st.session_state.stats['fraud'] += 1
+            else:
+                st.session_state.stats['normal'] += 1
+            st.session_state.stats['total_amount'] += montant
+            
+            st.success("✅ Analyse terminée!")
+            st.rerun()
+    
+    # Boutons d'exemple
+    st.markdown("""
+    <div style="margin-top: 20px;">
+        <p><strong>Exemples rapides:</strong></p>
     </div>
-    """.format(datetime.now().strftime("%d/%m/%Y")), unsafe_allow_html=True)
-
-# Onglets principaux
-tab1, tab2, tab3 = st.tabs(["🔍 Nouvelle Transaction", "📋 Historique", "📈 Analytics"])
-
-with tab1:
-    col_left, col_right = st.columns([5, 7])
+    """, unsafe_allow_html=True)
     
-    with col_left:
-        st.markdown("### 📝 Détails de la transaction")
-        
-        with st.form("transaction_form"):
-            col_f1, col_f2 = st.columns(2)
-            
-            with col_f1:
-                montant = st.number_input("Montant (DZD)", 1000, 1000000, 8500, 100,
-                                         help="Montant de la transaction en dinars")
-                heure = st.selectbox("Heure", options=list(range(24)),
-                                   format_func=lambda x: f"{x:02d}:00")
-                type_transaction = st.selectbox(
-                    "Type de transaction",
-                    ["ACHAT_CARTE", "RETRAIT_DAB", "VIREMENT", 
-                     "PAIEMENT_EN_LIGNE", "PAIEMENT_FACTURE"]
-                )
-                categorie_marchand = st.selectbox(
-                    "Catégorie",
-                    ["SUPERMARCHE", "ELECTRONIQUE", "VOYAGE", 
-                     "IMMOBILIER", "RESTAURANT", "ESSENCE", "PHARMACIE"]
-                )
-            
-            with col_f2:
-                canal_paiement = st.selectbox(
-                    "Canal",
-                    ["CARTE_PHYSIQUE", "MOBILE_BANKING", 
-                     "INTERNET_BANKING", "DAB", "AGENCE"]
-                )
-                wilaya_client = st.selectbox(
-                    "Wilaya",
-                    ["Alger", "Oran", "Constantine", "Annaba", 
-                     "Blida", "Sétif", "Batna", "Tizi Ouzou"]
-                )
-                revenu = st.number_input("Revenu mensuel (DZD)", 
-                                       10000, 1000000, 45000, 1000)
-                anciennete = st.number_input("Ancienneté (jours)", 
-                                          1, 3650, 500)
-            
-            # Boutons d'exemple
-            st.markdown("**Exemples rapides:**")
-            col_ex1, col_ex2, col_ex3 = st.columns(3)
-            with col_ex1:
-                if st.form_submit_button("💳 Normale", use_container_width=True):
-                    st.session_state.preset = "normal"
-            with col_ex2:
-                if st.form_submit_button("🚨 Fraude", use_container_width=True):
-                    st.session_state.preset = "fraud"
-            with col_ex3:
-                if st.form_submit_button("⚠️ Suspecte", use_container_width=True):
-                    st.session_state.preset = "suspicious"
-            
-            # Bouton d'analyse
-            analyze_clicked = st.form_submit_button(
-                "🔬 Analyser avec l'IA", 
-                type="primary", 
-                use_container_width=True
-            )
+    col_ex1, col_ex2, col_ex3 = st.columns(3, gap="small")
     
-    with col_right:
-        st.markdown("### 📊 Résultats")
+    with col_ex1:
+        if st.button("🛒 Transaction normale", use_container_width=True, key="ex_normal"):
+            st.session_state.montant = 8500
+            st.session_state.heure = 14
+            st.session_state.type_transaction = "ACHAT_CARTE"
+            st.session_state.categorie_marchand = "SUPERMARCHE"
+            st.session_state.canal_paiement = "CARTE_PHYSIQUE"
+            st.session_state.wilaya_client = "Alger"
+            st.session_state.revenu_client = 45000
+            st.session_state.anciennete = 500
+            st.rerun()
+    
+    with col_ex2:
+        if st.button("🚨 Transaction frauduleuse", use_container_width=True, key="ex_fraud"):
+            st.session_state.montant = 125000
+            st.session_state.heure = 3
+            st.session_state.type_transaction = "PAIEMENT_EN_LIGNE"
+            st.session_state.categorie_marchand = "ELECTRONIQUE"
+            st.session_state.canal_paiement = "INTERNET_BANKING"
+            st.session_state.wilaya_client = "Alger"
+            st.session_state.revenu_client = 35000
+            st.session_state.anciennete = 30
+            st.rerun()
+    
+    with col_ex3:
+        if st.button("⚠️ Transaction suspecte", use_container_width=True, key="ex_suspicious"):
+            st.session_state.montant = 45000
+            st.session_state.heure = 22
+            st.session_state.type_transaction = "VIREMENT"
+            st.session_state.categorie_marchand = "VOYAGE"
+            st.session_state.canal_paiement = "MOBILE_BANKING"
+            st.session_state.wilaya_client = "Oran"
+            st.session_state.revenu_client = 38000
+            st.session_state.anciennete = 150
+            st.rerun()
+    
+    # Carte: Statistiques
+    st.markdown("""
+    <div class="card" style="margin-top: 30px;">
+        <div class="card-header" style="background-color: #17a2b8; color: white;">
+            <i class="fas fa-chart-bar"></i> Statistiques
+        </div>
+        <div class="card-body">
+    """, unsafe_allow_html=True)
+    
+    stats = st.session_state.stats
+    col_stat1, col_stat2 = st.columns(2, gap="small")
+    
+    with col_stat1:
+        st.markdown(f"""
+        <div class="stat-card stat-card-total">
+            <h5><i class="fas fa-exchange-alt"></i></h5>
+            <h3>{stats['total']}</h3>
+            <p>Transactions totales</p>
+        </div>
+        """, unsafe_allow_html=True)
         
-        if analyze_clicked:
-            # Préparer les données
-            transaction_data = {
-                'montant_dzd': float(montant),
-                'heure_jour': heure,
-                'type_transaction': type_transaction,
-                'categorie_marchand': categorie_marchand,
-                'canal_paiement': canal_paiement,
-                'wilaya_client': wilaya_client,
-                'revenu_client': float(revenu),
-                'anciennete_client_jours': anciennete
-            }
+        st.markdown(f"""
+        <div class="stat-card stat-card-fraud">
+            <h5><i class="fas fa-shield-alt"></i></h5>
+            <h3>{stats['fraud']}</h3>
+            <p>Fraudes détectées</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col_stat2:
+        st.markdown(f"""
+        <div class="stat-card stat-card-normal">
+            <h5><i class="fas fa-check-circle"></i></h5>
+            <h3>{stats['normal']}</h3>
+            <p>Transactions normales</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        st.markdown(f"""
+        <div class="stat-card stat-card-amount">
+            <h5><i class="fas fa-money-bill-wave"></i></h5>
+            <h3>{stats['total_amount']:,.0f}</h3>
+            <p>Montant total (DZD)</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("</div></div>", unsafe_allow_html=True)
+
+# ========== COLONNE DROITE ==========
+with col2:
+    # Carte: Résultats
+    st.markdown("""
+    <div class="card">
+        <div class="card-header" style="background-color: #6c757d; color: white;">
+            <i class="fas fa-poll"></i> Résultats de l'analyse
+        </div>
+        <div class="card-body">
+    """, unsafe_allow_html=True)
+    
+    if st.session_state.transactions:
+        latest = st.session_state.transactions[-1]
+        
+        # En-tête des résultats
+        col_res1, col_res2 = st.columns([3, 1])
+        with col_res1:
+            if latest['is_fraud']:
+                st.markdown("""
+                <h4 style="color: #e74c3c;">
+                    <i class="fas fa-exclamation-triangle"></i> FRAUDE DÉTECTÉE
+                </h4>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("""
+                <h4 style="color: #27ae60;">
+                    <i class="fas fa-check-circle"></i> TRANSACTION SÉCURISÉE
+                </h4>
+                """, unsafe_allow_html=True)
+            st.caption(f"Transaction ID: {latest['id']}")
+        
+        with col_res2:
+            risk_class = f"risk-{latest['risk_level'].lower()}"
+            st.markdown(f"""
+            <div class="{risk_class}" style="text-align: center; padding: 10px;">
+                <i class="fas fa-chart-line"></i><br>
+                Risque: {latest['risk_level']}
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Détails de la transaction
+        col_detail1, col_detail2 = st.columns(2)
+        
+        with col_detail1:
+            st.markdown("**Détails de la transaction:**")
+            st.markdown(f"""
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 10px;">
+                <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+                    <span>Montant:</span>
+                    <span style="font-weight: bold;">{latest['montant']:,} DZD</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+                    <span>Heure:</span>
+                    <span>{latest['heure']}h00</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+                    <span>Type:</span>
+                    <span>{latest['type']}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin: 5px 0;">
+                    <span>Catégorie:</span>
+                    <span>{latest['categorie']}</span>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col_detail2:
+            st.markdown("**Analyse de risque:**")
             
-            # Analyser avec spinner
-            with st.spinner("🧠 Analyse en cours par l'IA..."):
-                result = predict_with_ml(transaction_data)
-                
-                # Ajouter à l'historique
-                transaction_record = {
-                    'id': f"TXN-{st.session_state.transaction_counter}",
-                    'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    'montant': montant,
-                    'heure': heure,
-                    'type': type_transaction,
-                    'categorie': categorie_marchand,
-                    **result
-                }
-                
-                st.session_state.transactions.append(transaction_record)
-                st.session_state.transaction_counter += 1
-                st.session_state.total_amount += montant
+            # Barre de progression
+            st.markdown("**Probabilité de fraude:**")
+            progress_html = f"""
+            <div style="background: #f0f0f0; border-radius: 12px; height: 25px; margin: 10px 0;">
+                <div style="background: {'#e74c3c' if latest['is_fraud'] else '#27ae60'}; 
+                          width: {latest['fraud_probability']*100}%; 
+                          height: 100%; 
+                          border-radius: 12px; 
+                          display: flex; 
+                          align-items: center; 
+                          padding-left: 10px; 
+                          color: white; 
+                          font-weight: bold;">
+                    {(latest['fraud_probability']*100):.1f}%
+                </div>
+            </div>
+            """
+            st.markdown(progress_html, unsafe_allow_html=True)
             
-            # Afficher les résultats
-            col_r1, col_r2, col_r3 = st.columns(3)
-            
-            with col_r1:
-                st.metric("Probabilité", f"{result['fraud_probability']*100:.1f}%")
-            
-            with col_r2:
-                risk_badge = f"badge-risk-{result['risk_level'].lower()}"
+            # Recommandation
+            st.markdown("**Recommandation:**")
+            if latest['is_fraud']:
                 st.markdown(f"""
-                <div style="text-align: center;">
-                    <div class="{risk_badge}">
-                        {result['risk_level']}
-                    </div>
+                <div class="alert alert-danger">
+                    <i class="fas fa-ban"></i> {latest['recommendation']}
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div class="alert alert-success">
+                    <i class="fas fa-check"></i> {latest['recommendation']}
                 </div>
                 """, unsafe_allow_html=True)
             
-            with col_r3:
-                st.metric("Confiance", f"{result['model_confidence']*100:.1f}%")
-            
-            # Barre de progression
-            st.progress(result['fraud_probability'])
-            
-            # Alerte
-            if result['is_fraud']:
-                st.markdown("""
-                <div class="alert-fraud">
-                    <h3>🚨 ALERTE FRAUDE DÉTECTÉE</h3>
-                    <p><strong>Recommandation:</strong> {}</p>
-                </div>
-                """.format(result['recommendation']), unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div class="alert-normal">
-                    <h3>✅ TRANSACTION SÉCURISÉE</h3>
-                    <p><strong>Recommandation:</strong> {}</p>
-                </div>
-                """.format(result['recommendation']), unsafe_allow_html=True)
-            
-            # Détails
-            with st.expander("🔍 Détails de l'analyse"):
-                st.markdown("**Raisons identifiées:**")
-                for raison in result['reasons']:
-                    st.write(f"• {raison}")
-                
-                st.markdown("**Données analysées:**")
-                st.json(transaction_data)
+            # Raisons
+            if latest['reasons']:
+                st.markdown("**Raisons:**")
+                reasons_html = "<div class='alert alert-warning'><ul style='margin-bottom: 0;'>"
+                for raison in latest['reasons']:
+                    reasons_html += f"<li>{raison}</li>"
+                reasons_html += "</ul></div>"
+                st.markdown(reasons_html, unsafe_allow_html=True)
         
-        else:
-            st.info("""
-            ### ⏳ En attente d'analyse
-            
-            Remplissez le formulaire et cliquez sur **"Analyser avec l'IA"** 
-            pour détecter les potentielles fraudes.
-            
-            **Caractéristiques analysées:**
-            • Montant et ratio revenu
-            • Heure de transaction
-            • Type et catégorie
-            • Ancienneté du compte
-            • Canal de paiement
-            """)
-
-with tab2:
-    st.markdown("### 📋 Historique des transactions")
+        # Bouton pour analyser une autre
+        st.markdown("---")
+        if st.button("🔄 Analyser une autre transaction", use_container_width=True):
+            pass  # Le formulaire reste affiché
+    
+    else:
+        # Aucune analyse effectuée
+        st.markdown("""
+        <div style="text-align: center; color: #6c757d; padding: 40px;">
+            <i class="fas fa-search" style="font-size: 48px; margin-bottom: 20px;"></i>
+            <h5>Aucune analyse effectuée</h5>
+            <p>Remplissez le formulaire et cliquez sur "Vérifier la transaction"</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("</div></div>", unsafe_allow_html=True)
+    
+    # Carte: Historique
+    st.markdown("""
+    <div class="card">
+        <div class="card-header" style="background-color: #343a40; color: white;">
+            <i class="fas fa-history"></i> Historique des transactions
+        </div>
+        <div class="card-body">
+    """, unsafe_allow_html=True)
     
     if st.session_state.transactions:
-        # Filtres
-        col_filter1, col_filter2, col_filter3 = st.columns(3)
-        with col_filter1:
-            show_all = st.checkbox("Tout afficher", value=True)
-        with col_filter2:
-            show_fraud = st.checkbox("Fraudes uniquement", value=False)
-        with col_filter3:
-            show_normal = st.checkbox("Normales uniquement", value=False)
+        # Créer le tableau HTML
+        table_html = """
+        <div class="transaction-history">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Montant</th>
+                        <th>Heure</th>
+                        <th>Type</th>
+                        <th>Statut</th>
+                        <th>Risque</th>
+                    </tr>
+                </thead>
+                <tbody>
+        """
         
-        # Filtrer les transactions
-        filtered_transactions = st.session_state.transactions
-        if show_fraud:
-            filtered_transactions = [t for t in filtered_transactions if t['is_fraud']]
-        if show_normal:
-            filtered_transactions = [t for t in filtered_transactions if not t['is_fraud']]
+        # Ajouter les 10 dernières transactions
+        for t in reversed(st.session_state.transactions[-10:]):
+            # Badge de statut
+            badge = '<span class="fraud-badge">Fraude</span>' if t['is_fraud'] else '<span class="normal-badge">Normal</span>'
+            
+            # Classe de risque
+            risk_class = f"risk-{t['risk_level'].lower()}"
+            
+            table_html += f"""
+                <tr>
+                    <td><small>{t['id']}</small></td>
+                    <td><strong>{t['montant']:,} DZD</strong></td>
+                    <td>{t['heure']}h00</td>
+                    <td>{t['type']}</td>
+                    <td>{badge}</td>
+                    <td><span class="{risk_class}">{t['risk_level']}</span></td>
+                </tr>
+            """
         
-        # Afficher le tableau
-        for t in reversed(filtered_transactions[-20:]):  # Limiter à 20
-            with st.container(border=True):
-                cols = st.columns([2, 1, 1, 1, 1, 1])
-                
-                with cols[0]:
-                    st.write(f"**{t['id']}**")
-                    st.caption(t['timestamp'])
-                    st.write(f"📍 {t['type']} • {t['categorie']}")
-                
-                with cols[1]:
-                    st.write(f"**{t['montant']:,.0f}** DZD")
-                
-                with cols[2]:
-                    st.write(f"🕐 {t['heure']}h")
-                
-                with cols[3]:
-                    if t['is_fraud']:
-                        st.markdown('<span class="badge-fraud">FRAUDE</span>', unsafe_allow_html=True)
-                    else:
-                        st.markdown('<span class="badge-normal">NORMAL</span>', unsafe_allow_html=True)
-                
-                with cols[4]:
-                    risk_class = f"badge-risk-{t['risk_level'].lower()}"
-                    st.markdown(f'<span class="{risk_class}">{t["risk_level"]}</span>', unsafe_allow_html=True)
-                
-                with cols[5]:
-                    st.progress(t['fraud_probability'])
-                    st.caption(f"{t['fraud_probability']*100:.1f}%")
-    else:
-        st.info("""
-        ## 📭 Aucune transaction
+        table_html += """
+                </tbody>
+            </table>
+        </div>
+        """
         
-        Analysez votre première transaction pour commencer à remplir l'historique.
-        """)
-
-with tab3:
-    st.markdown("### 📈 Analytics & Statistiques")
+        st.markdown(table_html, unsafe_allow_html=True)
+        
+        # Bouton pour effacer l'historique
+        col_hist1, col_hist2 = st.columns([3, 1])
+        with col_hist2:
+            if st.button("🗑️ Effacer l'historique", use_container_width=True):
+                st.session_state.transactions = []
+                st.session_state.transaction_counter = 1
+                st.session_state.stats = {'total': 0, 'fraud': 0, 'normal': 0, 'total_amount': 0}
+                st.success("Historique effacé!")
+                st.rerun()
     
-    if st.session_state.transactions:
-        total = len(st.session_state.transactions)
-        fraudes = sum(1 for t in st.session_state.transactions if t['is_fraud'])
-        normales = total - fraudes
-        
-        # Cartes de stats
-        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
-        
-        with col_s1:
-            st.markdown(f"""
-            <div class="stat-card stat-total">
-                <h3>{total}</h3>
-                <p>Transactions</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col_s2:
-            st.markdown(f"""
-            <div class="stat-card stat-fraud">
-                <h3>{fraudes}</h3>
-                <p>Fraudes</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col_s3:
-            taux = (fraudes/total*100) if total > 0 else 0
-            st.markdown(f"""
-            <div class="stat-card stat-normal">
-                <h3>{taux:.1f}%</h3>
-                <p>Taux de fraude</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        with col_s4:
-            montant_total = sum(t['montant'] for t in st.session_state.transactions)
-            st.markdown(f"""
-            <div class="stat-card stat-amount">
-                <h3>{montant_total/1000:.0f}K</h3>
-                <p>DZD total</p>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # Graphiques
-        col_chart1, col_chart2 = st.columns(2)
-        
-        with col_chart1:
-            st.markdown("#### 📊 Répartition des risques")
-            risk_data = {
-                'HIGH': sum(1 for t in st.session_state.transactions if t['risk_level'] == 'HIGH'),
-                'MEDIUM': sum(1 for t in st.session_state.transactions if t['risk_level'] == 'MEDIUM'),
-                'LOW': sum(1 for t in st.session_state.transactions if t['risk_level'] == 'LOW')
-            }
-            st.bar_chart(risk_data)
-        
-        with col_chart2:
-            st.markdown("#### 📈 Évolution des détections")
-            # Simulation de données temporelles
-            dates = pd.date_range(end=datetime.now(), periods=min(10, total), freq='D')
-            fraud_counts = [np.random.randint(0, 3) for _ in range(len(dates))]
-            chart_data = pd.DataFrame({
-                'Date': dates,
-                'Fraudes détectées': fraud_counts
-            }).set_index('Date')
-            st.line_chart(chart_data)
-        
-        # Tableau des métriques
-        st.markdown("#### 📋 Métriques de performance")
-        metrics_data = {
-            'Métrique': ['Précision', 'Rappel', 'F1-Score', 'AUC', 'Temps moyen d\'analyse'],
-            'Valeur': ['95.2%', '93.8%', '94.5%', '0.98', '0.8s'],
-            'Statut': ['✅', '✅', '✅', '✅', '✅']
-        }
-        st.dataframe(metrics_data, use_container_width=True)
-        
     else:
-        st.info("Analysez des transactions pour voir les statistiques.")
+        st.info("Aucune transaction dans l'historique.")
+    
+    st.markdown("</div></div>", unsafe_allow_html=True)
 
-# Pied de page
+# ========== PIED DE PAGE ==========
 st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #666; padding: 20px;">
+current_date = datetime.now().strftime("%A %d %B %Y, %H:%M")
+st.markdown(f"""
+<footer>
     <p>
-        <strong>🚀 Système de Détection de Fraude - Banque Badr</strong><br>
-        Projet Machine Learning pour Salon de Recrutement<br>
-        Déployé sur Streamlit Cloud • {date}
+        <i class="fas fa-code"></i> Système de Détection de Fraude - Banque Badr | 
+        Développé avec Streamlit & Machine Learning | 
+        {current_date}
     </p>
-</div>
-""".format(date=datetime.now().strftime("%d %B %Y")), unsafe_allow_html=True)
+</footer>
+""", unsafe_allow_html=True)
 
-# Charger le modèle au démarrage
-if not st.session_state.model_loaded:
-    load_ml_model()
+# ========== REQUIREMENTS.TXT ==========
+# Créer automatiquement le fichier requirements.txt
+requirements_content = """pandas>=2.0.0
+numpy>=1.24.0
+streamlit>=1.28.0
+"""
+
+# Sauvegarder le fichier requirements.txt
+import os
+if not os.path.exists("requirements.txt"):
+    with open("requirements.txt", "w") as f:
+        f.write(requirements_content)
